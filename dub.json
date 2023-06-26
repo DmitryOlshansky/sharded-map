@@ -1,0 +1,9 @@
+{
+	"authors": [
+		"Dmitry Olshansky"
+	],
+	"copyright": "Copyright © 2023, Dmitry Olshansky",
+	"description": "A concurrent version of hash map",
+	"license": "BOOST",
+	"name": "sharded-map"
+}
