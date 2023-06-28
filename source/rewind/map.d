@@ -60,7 +60,7 @@ class Map(K, V) {
     }
 
     int opApply(scope int delegate(K, V) fn) {
-        foreach (shard; shards) {
+        foreach (ref shard; shards) {
             shard.lock.lock();
             scope(exit) shard.lock.unlock();
             foreach (k, v; shard.map) {
