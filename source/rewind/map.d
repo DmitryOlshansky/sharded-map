@@ -122,6 +122,27 @@ class MultiMap(K, V) {
         scope(exit) s.lock.unlock();
         s.bucket.remove(key);
     }
+
+    size_t length() {
+        size_t len = 0;
+        foreach (ref shard; shards) {
+            shard.lock.lock();
+            scope(exit) shard.lock.unlock();
+            len += shard.bucket.length;
+        }
+        return len;
+    }
+
+    int opApply(scope int delegate(K key, V[] value) dg) {
+        foreach (ref shard; shards) {
+            shard.lock.lock();
+            scope(exit) shard.lock.unlock();
+            foreach (k, v; shard.bucket) {
+                dg(k, v);
+            }
+        }
+        return 1;
+    }
 }
 
 unittest {
@@ -129,4 +150,8 @@ unittest {
     mm["a"] = 2;
     mm["a"] = 3;
     assert(mm["a"] == [2,3]);
+    foreach (k,v; mm) {
+        assert(k == "a");
+        assert(v == [2,3]);
+    }
 }
