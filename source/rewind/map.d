@@ -2,17 +2,11 @@ module rewind.map;
 import core.internal.spinlock;
 
 
-int hashOf(int x) => x % 31;
+private immutable size_t BUCKETS = 31;
 
-int hashOf(long x) => x % 31;
-
-int hashOf(const(char)[] str) {
-    int hash = 131;
-    foreach (c; str) {
-        hash = hash * 31 + c;
-    }
-    return hash % 31;
-} 
+size_t bucketOf(T)(auto ref T value) {
+    return value.hashOf() % BUCKETS;
+}
 
 class Map(K, V) {
     struct Shard {
@@ -21,32 +15,32 @@ class Map(K, V) {
     }
     Shard[] shards;
     this() {
-        shards = new Shard[31];
+        shards = new Shard[BUCKETS];
     }
  
     auto opIndex(K key) {
-        auto shard = &shards[hashOf(key)];
+        auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
         return shard.map[key];
     }
 
     ref opIndexAssign(V value, K key) {
-        auto shard = &shards[hashOf(key)];
+        auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
         shard.map[key] = value;
     }
 
     V* opBinaryRight(string op:"in")(K key) {
-        auto shard = &shards[hashOf(key)];
+        auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
         return key in shard.map;
     }
 
     void remove(K key) {
-        auto shard = &shards[hashOf(key)];
+        auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
         shard.map.remove(key);
@@ -86,6 +80,27 @@ unittest {
     assert(map.length == 0);
 }
 
+unittest {
+     static struct A {
+        int k;
+     }
+     int[A] hashmap;
+     auto map = new Map!(A, int);
+     map[A(32)] = 2;
+     assert(map[A(32)] == 2);
+}
+
+unittest {
+    auto map = new Map!(string, string);
+    auto key = "hello, world!";
+    foreach (i; 0..key.length) {
+        map[key[0..i]] = "abc";
+    }
+    foreach (i; 0..key.length) {
+        assert(map[key[0..i]] == "abc");
+    }
+}
+
 class MultiMap(K, V) {
     struct Shard {
         SpinLock lock;
@@ -94,18 +109,18 @@ class MultiMap(K, V) {
     Shard[] shards;
 
     this() {
-        shards = new Shard[31];
+        shards = new Shard[BUCKETS];
     }
 
     V[] opIndex(K key) {
-        auto s = &shards[hashOf(key)];
+        auto s = &shards[bucketOf(key)];
         s.lock.lock();
         scope(exit) s.lock.unlock();
         return s.bucket[key];
     }
 
     void opIndexAssign(V value, K key) {
-        auto s = &shards[hashOf(key)];
+        auto s = &shards[bucketOf(key)];
         s.lock.lock();
         scope(exit) s.lock.unlock();
         auto p = key in s.bucket;
@@ -117,7 +132,7 @@ class MultiMap(K, V) {
     }
 
     void remove(K key) {
-        auto s = &shards[hashOf(key)];
+        auto s = &shards[bucketOf(key)];
         s.lock.lock();
         scope(exit) s.lock.unlock();
         s.bucket.remove(key);
