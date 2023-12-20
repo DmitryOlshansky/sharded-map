@@ -25,6 +25,19 @@ class Map(K, V) {
         return shard.map[key];
     }
 
+    V getOrDefault(K key, V default_) {
+        auto shard = &shards[bucketOf(key)];
+        shard.lock.lock();
+        scope(exit) shard.lock.unlock();
+        auto v = key in shard.map;
+        if (v) {
+            return *v;
+        }
+        else {
+            return default_;
+        }
+    }
+
     V put(K key, V value) {
         auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
@@ -142,6 +155,8 @@ unittest {
     auto map = new Map!(string, int);
     assert(map.put("A", 1) == 0);
     assert(map.put("A", 2) == 1);
+    assert(map.getOrDefault("A", 3) == 2);
+    assert(map.getOrDefault("B", 3) == 3);
 }
 
 class MultiMap(K, V) {
