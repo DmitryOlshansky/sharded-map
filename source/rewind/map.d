@@ -46,6 +46,16 @@ class Map(K, V) {
         shard.map.remove(key);
     }
 
+    void removeIf(K key, scope bool delegate(ref V) cond) {
+        auto shard = &shards[bucketOf(key)];
+        shard.lock.lock();
+        scope(exit) shard.lock.unlock();
+        auto value = key in shard.map;
+        if (value != null && cond(*value)) {
+            shard.map.remove(key);
+        }
+    }
+
     size_t length() {
         size_t len = 0;
         foreach (shard; shards) {
@@ -99,6 +109,17 @@ unittest {
     foreach (i; 0..key.length) {
         assert(map[key[0..i]] == "abc");
     }
+}
+
+unittest {
+    auto map = new Map!(string, string);
+    map["abc"] = "def";
+    map.removeIf("ABC", (ref string x) { return x == "def"; });
+    assert(map["abc"] == "def");
+    map.removeIf("abc", (ref string x) { return x == "DEF"; });
+    assert(map["abc"] == "def");
+    map.removeIf("abc", (ref string x) { return x == "def"; });
+    assert(("abc" in map) == null);
 }
 
 class MultiMap(K, V) {
