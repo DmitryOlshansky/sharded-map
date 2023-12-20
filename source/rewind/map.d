@@ -25,6 +25,22 @@ class Map(K, V) {
         return shard.map[key];
     }
 
+    V put(K key, V value) {
+        auto shard = &shards[bucketOf(key)];
+        shard.lock.lock();
+        scope(exit) shard.lock.unlock();
+        auto p = key in shard.map;
+        if (p) {
+            auto old = *p;
+            shard.map[key] = value;
+            return old;
+        }
+        else {
+            shard.map[key] = value;
+            return V.init;
+        }
+    }
+
     ref opIndexAssign(V value, K key) {
         auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
@@ -32,11 +48,11 @@ class Map(K, V) {
         shard.map[key] = value;
     }
 
-    V* opBinaryRight(string op:"in")(K key) {
+    bool opBinaryRight(string op:"in")(K key) {
         auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
-        return key in shard.map;
+        return (key in shard.map) != null;
     }
 
     void remove(K key) {
@@ -119,7 +135,13 @@ unittest {
     map.removeIf("abc", (ref string x) { return x == "DEF"; });
     assert(map["abc"] == "def");
     map.removeIf("abc", (ref string x) { return x == "def"; });
-    assert(("abc" in map) == null);
+    assert(("abc" !in map));
+}
+
+unittest {
+    auto map = new Map!(string, int);
+    assert(map.put("A", 1) == 0);
+    assert(map.put("A", 2) == 1);
 }
 
 class MultiMap(K, V) {
