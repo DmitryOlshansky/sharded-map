@@ -68,20 +68,33 @@ class Map(K, V) {
         return (key in shard.map) != null;
     }
 
-    void remove(K key) {
+    V remove(K key) {
         auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
-        shard.map.remove(key);
+        auto p = key in shard.map;
+        if (p) {
+            auto v = *p;
+            shard.map.remove(key);
+            return v;
+        }
+        else {
+            return V.init;
+        }
     }
 
-    void removeIf(K key, scope bool delegate(ref V) cond) {
+    V removeIf(K key, scope bool delegate(ref V) cond) {
         auto shard = &shards[bucketOf(key)];
         shard.lock.lock();
         scope(exit) shard.lock.unlock();
         auto value = key in shard.map;
         if (value != null && cond(*value)) {
+            auto v = *value;
             shard.map.remove(key);
+            return v;
+        }
+        else {
+            return V.init;
         }
     }
 
@@ -114,7 +127,7 @@ unittest {
         assert(k == 0);
         assert(v == "hello");
     }
-    map.remove(0);
+    assert(map.remove(0) == "hello");
     assert(!(0 in map));
     assert(map.length == 0);
 }
@@ -143,11 +156,11 @@ unittest {
 unittest {
     auto map = new Map!(string, string);
     map["abc"] = "def";
-    map.removeIf("ABC", (ref string x) { return x == "def"; });
+    assert(map.removeIf("ABC", (ref string x) { return x == "def"; }) == null);
     assert(map["abc"] == "def");
-    map.removeIf("abc", (ref string x) { return x == "DEF"; });
+    assert(map.removeIf("abc", (ref string x) { return x == "DEF"; }) == null);
     assert(map["abc"] == "def");
-    map.removeIf("abc", (ref string x) { return x == "def"; });
+    assert(map.removeIf("abc", (ref string x) { return x == "def"; }) == "def");
     assert(("abc" !in map));
 }
 
